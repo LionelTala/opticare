@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\VerifyCabinetRequest;
+use App\Http\Requests\Cabinet\UpdateProfileRequest;
 use App\Services\Admin\AdminService;
 use App\Traits\ApiResponseTrait;
 use App\Http\Resources\CabinetResource;
@@ -87,4 +88,23 @@ class CabinetController extends Controller
             );
         }
     }
+    /**
+ * Mettre à jour le profil d'un cabinet
+ */
+public function updateProfile(UpdateProfileRequest $request, int $id): JsonResponse
+{
+    try {
+        $result = $this->adminService->updateProfile($request->validated(), $id);
+
+        return $this->successResponse([
+            'cabinet' => new CabinetResource($result['cabinet']),
+        ], 'Profil du cabinet mis à jour avec succès.');
+    } catch (\Exception $e) {
+        return $this->errorResponse(
+            'Erreur lors de la mise à jour du profil',
+            ['general' => $e->getMessage()],
+            500
+        );
+    }
+}
 }

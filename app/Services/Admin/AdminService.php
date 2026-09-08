@@ -77,4 +77,35 @@ class AdminService
             throw $e;
         }
     }
+    /**
+ * Mettre à jour le profil d'un cabinet
+ */
+public function updateProfile(array $data, int $cabinetId): array
+{
+    try {
+        DB::beginTransaction();
+
+        $cabinet = Cabinet::findOrFail($cabinetId);
+
+        // Vérifier que l'utilisateur connecté est le propriétaire
+        $user = auth('sanctum')->user();
+        if ($cabinet->proprietaire_id !== $user->id && !$user->isSuperAdmin()) {
+            throw new \Exception('Vous n\'êtes pas autorisé à modifier ce cabinet.');
+        }
+
+        $cabinet->update($data);
+
+        DB::commit();
+
+        $cabinet->load('proprietaire');
+
+        return [
+            'cabinet' => $cabinet,
+        ];
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Erreur mise à jour profil cabinet : ' . $e->getMessage());
+        throw $e;
+    }
+}
 }

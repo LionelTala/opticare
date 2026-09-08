@@ -15,18 +15,31 @@ class Cabinet extends Model
         'nom',
         'adresse',
         'ville',
+        'quartier',
         'telephone',
         'email',
+        'whatsapp_numero',
+        'slogan',
+        'description',
+        'logo_url',
+        'photos',
+        'site_web',
+        'facebook',
+        'instagram',
+        'tiktok',
+        'abonnement_premium',
         'is_verified',
-        'proprietaire_id',
         'status',
         'motif_refus',
+        'proprietaire_id',
         'valide_le',
         'valide_par'
     ];
 
     protected $casts = [
         'is_verified' => 'boolean',
+        'abonnement_premium' => 'boolean',
+        'photos' => 'array',
         'valide_le' => 'datetime',
     ];
 
@@ -45,6 +58,24 @@ class Cabinet extends Model
         return $this->hasMany(User::class, 'cabinet_id');
     }
 
+    // public function avis()
+    // {
+    //     return $this->hasMany(Avis::class);
+    // }
+
+    // Note moyenne des avis
+    public function getNoteMoyenneAttribute()
+    {
+        return $this->avis()->avg('note') ?? 0;
+    }
+
+    // Nombre d'avis
+    public function getNbAvisAttribute()
+    {
+        return $this->avis()->count();
+    }
+
+    // Scopes
     public function scopeEnAttente($query)
     {
         return $query->where('status', 'en_attente');
@@ -58,5 +89,17 @@ class Cabinet extends Model
     public function scopeRefuse($query)
     {
         return $query->where('status', 'refuse');
+    }
+
+    public function scopePremium($query)
+    {
+        return $query->where('abonnement_premium', true);
+    }
+
+    public function scopeRecherche($query, $search)
+    {
+        return $query->where('nom', 'like', "%{$search}%")
+            ->orWhere('ville', 'like', "%{$search}%")
+            ->orWhere('quartier', 'like', "%{$search}%");
     }
 }
