@@ -125,26 +125,182 @@ class RdvController extends Controller
     }
 
     /**
- * Prendre un RDV
- */
-public function prendreRdv(PrendreRdvRequest $request): JsonResponse
-{
-    try {
-        $userId = auth()->id();
-        
-        $result = $this->rdvService->prendreRdv($request->validated(), $userId);
+     * Prendre un RDV
+     */
+    public function prendreRdv(PrendreRdvRequest $request): JsonResponse
+    {
+        try {
+            $userId = auth('sanctum')->id();
+            
+            $result = $this->rdvService->prendreRdv($request->validated(), $userId);
 
-        return $this->successResponse([
-            'rdv' => $result['rdv'],
-            'patient' => $result['patient'],
-            'statut' => $result['statut'],
-        ], $result['message'], 201);
-    } catch (\Exception $e) {
-        return $this->errorResponse(
-            'Erreur lors de la prise de RDV',
-            ['general' => $e->getMessage()],
-            500
-        );
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+                'patient' => $result['patient'],
+                'statut' => $result['statut'],
+            ], $result['message'], 201);
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la prise de RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
     }
-}
+
+    /**
+     * Annuler un RDV
+     */
+    public function annulerRdv(int $id): JsonResponse
+    {
+        try {
+            $result = $this->rdvService->annulerRdv($id);
+
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+            ], $result['message']);
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de l\'annulation du RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Confirmer un RDV (par le cabinet)
+     */
+    public function confirmerRdv(int $id): JsonResponse
+    {
+        try {
+            $result = $this->rdvService->confirmerRdv($id);
+
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+            ], $result['message']);
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la confirmation du RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Marquer un RDV comme non honoré
+     */
+    public function nonHonoreRdv(int $id): JsonResponse
+    {
+        try {
+            $result = $this->rdvService->nonHonoreRdv($id);
+
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+            ], $result['message']);
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors du marquage du RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Terminer un RDV
+     */
+    public function terminerRdv(int $id): JsonResponse
+    {
+        try {
+            $result = $this->rdvService->terminerRdv($id);
+
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+            ], $result['message']);
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la terminaison du RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Modifier un RDV
+     */
+    public function modifierRdv(Request $request, int $id): JsonResponse
+    {
+        try {
+            $data = $request->validate([
+                'date' => 'sometimes|date|after_or_equal:today',
+                'heure_debut' => 'sometimes|date_format:H:i',
+                'motif' => 'nullable|string|max:255',
+                'notes' => 'nullable|string|max:500',
+            ]);
+
+            $result = $this->rdvService->modifierRdv($data, $id);
+
+            return $this->successResponse([
+                'rdv' => $result['rdv'],
+            ], $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->errorResponse(
+                'Erreur de validation',
+                $e->errors(),
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la modification du RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Récupérer les RDV d'un patient
+     */
+    public function getRdvByPatient(int $patientId): JsonResponse
+    {
+        try {
+            $result = $this->rdvService->getRdvByPatient($patientId);
+
+            return $this->successResponse([
+                'rdvs' => $result['rdvs'],
+            ], 'RDV du patient récupérés avec succès.');
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Récupérer les RDV d'un cabinet
+     */
+    public function getRdvByCabinet(Request $request, int $cabinetId): JsonResponse
+    {
+        try {
+            $date = $request->query('date');
+            $statut = $request->query('statut');
+            
+            $result = $this->rdvService->getRdvByCabinet($cabinetId, $date, $statut);
+
+            return $this->successResponse([
+                'rdvs' => $result['rdvs'],
+            ], 'RDV du cabinet récupérés avec succès.');
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des RDV',
+                ['general' => $e->getMessage()],
+                500
+            );
+        }
+    }
 }

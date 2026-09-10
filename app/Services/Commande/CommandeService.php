@@ -4,11 +4,24 @@ namespace App\Services\Commande;
 
 use App\Models\Commande;
 use App\Models\Consultation;
+use App\Models\User;
+use App\Models\Cabinet;
+use App\Services\Notification\NotificationService;
+use App\Services\Email\EmailService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class CommandeService
 {
+    protected NotificationService $notificationService;
+    protected EmailService $emailService;
+
+    public function __construct(NotificationService $notificationService, EmailService $emailService)
+    {
+        $this->notificationService = $notificationService;
+        $this->emailService = $emailService;
+    }
+
     /**
      * Créer une commande
      */
@@ -74,7 +87,7 @@ class CommandeService
     }
 
     /**
-     * Mettre à jour une commande
+     * Mettre à jour une commande - AVEC NOTIFICATIONS ET EMAILS
      */
     public function updateCommande(array $data, int $id): array
     {
@@ -83,12 +96,41 @@ class CommandeService
 
             $commande = Commande::findOrFail($id);
 
-            // Si la commande est terminée, on ne peut plus la modifier
             if ($commande->isTerminee()) {
                 throw new \Exception('Cette commande est terminée et ne peut plus être modifiée.');
             }
 
+            // Vérifier si le statut devient 'termine'
+            $statutDevientTermine = isset($data['statut']) && $data['statut'] === 'termine';
+
             $commande->update($data);
+
+            // Si la commande est terminée, envoyer notifications et email
+            if ($statutDevientTermine) {
+                $patient = $commande->consultation->patient;
+                if ($patient && $patient->user_id) {
+                    $user = User::find($patient->user_id);
+                    if ($user) {
+                        // ✅ Notification BDD
+                        $this->notificationService->commandeTerminee($user, [
+                            'commande_id' => $commande->id,
+                            'numero_monture' => $commande->numero_monture,
+                            'cabinet_id' => $commande->cabinet_id,
+                        ]);
+
+                        // ✅ Email
+                        if ($user->email) {
+                            $cabinet = Cabinet::find($commande->cabinet_id);
+                            $this->emailService->sendCommandeTerminee(
+                                $user->email,
+                                $user->prenom . ' ' . $user->nom,
+                                $commande->id,
+                                $cabinet->nom ?? 'Cabinet'
+                            );
+                        }
+                    }
+                }
+            }
 
             DB::commit();
 

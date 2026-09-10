@@ -1,9 +1,9 @@
 <?php
 
 namespace App\Providers;
-
+use App\Models\RdvCreneau;
 use Illuminate\Support\ServiceProvider;
-
+use App\Observers\RdvCreneauObserver;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -19,6 +19,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
- 
+        RdvCreneau::observe(RdvCreneauObserver::class);
     }
 }

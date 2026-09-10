@@ -7,15 +7,23 @@ use App\Models\User;
 use App\Services\Email\EmailService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\Notification\NotificationService;
+
 
 class AdminService
 {
     protected EmailService $emailService;
+        protected NotificationService $notificationService;
 
-    public function __construct(EmailService $emailService)
+
+  
+
+    public function __construct(EmailService $emailService, NotificationService $notificationService)
     {
         $this->emailService = $emailService;
+        $this->notificationService = $notificationService;
     }
+
 
     public function getCabinets(): array
     {
