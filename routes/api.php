@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\RegisterCabinetController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Admin\CabinetController;
+use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\CabinetPublicController;
 use App\Http\Controllers\Api\CommandeController;
 use App\Http\Controllers\Api\ConsultationController;
@@ -144,4 +145,30 @@ Route::middleware(['auth:sanctum', 'superadmin'])->prefix('admin')->group(functi
     Route::get('/cabinets', [CabinetController::class, 'index']);
     Route::put('/cabinets/{id}/verify', [CabinetController::class, 'verify']);
     Route::put('/cabinets/{id}/reject', [CabinetController::class, 'reject']);
+
+     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{id}', [UserController::class, 'show']);
+    Route::patch('/users/{id}', [UserController::class, 'update']);
+    Route::put('/users/{id}/toggle-active', [UserController::class, 'toggleActive']);
+    Route::put('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+});
+
+use App\Http\Controllers\Api\AvisController;
+
+// Routes publiques - Avis d'un cabinet
+Route::get('/cabinets/{cabinetId}/avis', [AvisController::class, 'getByCabinet']);
+
+// Routes protégées - Avis
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::post('/avis', [AvisController::class, 'store']);
+    Route::get('/patient/avis', [AvisController::class, 'getByPatient']);
+    Route::patch('/avis/{id}', [AvisController::class, 'update']);
+    Route::delete('/avis/{id}', [AvisController::class, 'destroy']);
+});
+
+use App\Http\Controllers\Api\StatistiqueController;
+
+// Routes protégées - Statistiques
+Route::middleware(['auth:sanctum', 'role:proprietaire,opticien'])->group(function () {
+    Route::get('/cabinets/{cabinetId}/statistiques', [StatistiqueController::class, 'getStatistiques']);
 });

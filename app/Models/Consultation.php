@@ -76,20 +76,24 @@ class Consultation extends Model
         return $this->belongsTo(RdvCreneau::class, 'rdv_id');
     }
 
-    // public function commandes()
-    // {
-    //     return $this->hasMany(Commande::class);
-    // }
+    public function commandes()
+    {
+        return $this->hasMany(Commande::class);
+    }
 
-    // public function avis()
-    // {
-    //     return $this->hasOne(Avis::class);
-    // }
+    public function avis()
+    {
+        return $this->hasOne(Avis::class);
+    }
 
     // Vérifications
     public function isModifiable(): bool
     {
         return !$this->verrouillee && $this->statut === 'en_cours';
+    }
+    public function peutRecevoirAvis(): bool
+    {
+        return $this->statut === 'terminee' && !$this->avis;
     }
 
     public function isTerminee(): bool

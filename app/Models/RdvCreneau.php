@@ -16,6 +16,8 @@ class RdvCreneau extends Model
         'date',
         'heure_debut',
         'heure_fin',
+        'rappel_envoye',
+    'rappel_envoye_le',
         'motif',
         'statut',
         'source',
@@ -28,6 +30,8 @@ class RdvCreneau extends Model
 
     protected $casts = [
         'date' => 'date',
+        'rappel_envoye' => 'boolean',
+    'rappel_envoye_le' => 'datetime',
     ];
 
     public function cabinet()
@@ -69,4 +73,11 @@ class RdvCreneau extends Model
     {
         return $query->where('statut', 'confirme');
     }
+    public function scopeARappeler($query)
+{
+    $demain = now()->addDay()->toDateString();
+    return $query->where('date', $demain)
+        ->whereIn('statut', ['confirme', 'reserve'])
+        ->where('rappel_envoye', false);
+}
 }

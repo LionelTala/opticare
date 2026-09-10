@@ -500,4 +500,56 @@ public function sendRdvModifieCabinet(string $to, string $name, string $patientN
         Log::error('Erreur envoi email modification RDV cabinet : ' . $e->getMessage());
     }
 }
+
+/**
+ * Envoyer un email de rappel de RDV
+ */
+public function sendRdvRappel(string $to, string $name, string $cabinetNom, string $cabinetAdresse, string $date, string $heure): void
+{
+    if (empty($to)) {
+        Log::warning('Email non envoyé - destinataire sans email');
+        return;
+    }
+
+    try {
+        $subject = '⏰ Rappel : votre RDV Opticare demain';
+        $message = "
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: #d69e2e; color: white; padding: 20px; text-align: center; }
+                    .content { padding: 20px; background: #f7fafc; }
+                    .footer { text-align: center; padding: 20px; font-size: 12px; color: #718096; }
+                    .info { background: #fefcbf; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #d69e2e; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'><h1>⏰ Rappel de RDV</h1></div>
+                    <div class='content'>
+                        <p>Bonjour <strong>{$name}</strong>,</p>
+                        <p>Nous vous rappelons que vous avez un RDV <strong>demain</strong>.</p>
+                        <div class='info'>
+                            <p><strong>Cabinet :</strong> {$cabinetNom}</p>
+                            <p><strong>Adresse :</strong> {$cabinetAdresse}</p>
+                            <p><strong>Date :</strong> {$date}</p>
+                            <p><strong>Heure :</strong> {$heure}</p>
+                        </div>
+                        <p>Merci de vous présenter 10 minutes avant l'heure prévue.</p>
+                        <p>Si vous ne pouvez pas venir, merci d'annuler votre RDV depuis l'application.</p>
+                        <p>Cordialement,<br><strong>L'équipe Opticare</strong></p>
+                    </div>
+                    <div class='footer'><p>&copy; 2026 Opticare. Tous droits réservés.</p></div>
+                </div>
+            </body>
+            </html>
+        ";
+
+        $this->sendEmail($to, $name, $subject, $message);
+    } catch (\Exception $e) {
+        Log::error('Erreur envoi email rappel RDV : ' . $e->getMessage());
+    }
+}
 }

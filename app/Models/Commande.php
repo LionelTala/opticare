@@ -19,6 +19,9 @@ class Commande extends Model
         'description_foyers',
         'port',
         'antireflet',
+        'prix',
+        'prix_paye',
+        'paye_le',
         'diag_od_sphere',
         'diag_od_cylindre',
         'diag_od_axe',
@@ -33,6 +36,9 @@ class Commande extends Model
 
     protected $casts = [
         'antireflet' => 'boolean',
+        'prix' => 'decimal:2',
+    'prix_paye' => 'decimal:2',
+    'paye_le' => 'datetime',
     ];
 
     // Relations

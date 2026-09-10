@@ -58,22 +58,22 @@ class Cabinet extends Model
         return $this->hasMany(User::class, 'cabinet_id');
     }
 
-    // public function avis()
-    // {
-    //     return $this->hasMany(Avis::class);
-    // }
-
-    // Note moyenne des avis
+    public function avis()
+    {
+        return $this->hasMany(Avis::class);
+    }
     public function getNoteMoyenneAttribute()
     {
-        return $this->avis()->avg('note') ?? 0;
+        return round($this->avis()->where('est_publie', true)->avg('note') ?? 0, 1);
     }
 
-    // Nombre d'avis
+    // Nombre d'avis publiés
     public function getNbAvisAttribute()
     {
-        return $this->avis()->count();
+        return $this->avis()->where('est_publie', true)->count();
     }
+
+  
 
     // Scopes
     public function scopeEnAttente($query)
