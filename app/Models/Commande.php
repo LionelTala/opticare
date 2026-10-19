@@ -88,4 +88,8 @@ class Commande extends Model
     {
         return $query->where('statut', 'termine');
     }
+    public function factures()
+{
+    return $this->hasMany(Facture::class);
+}
 }

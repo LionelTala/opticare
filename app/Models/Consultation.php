@@ -121,4 +121,8 @@ class Consultation extends Model
     {
         return $query->where('verrouillee', false);
     }
+    public function ordonnance()
+{
+    return $this->hasOne(Ordonnance::class);
+}
 }

@@ -23,9 +23,49 @@ class RdvService
         $this->emailService = $emailService;
     }
 
+    // ==========================================================
+    // HELPERS
+    // ==========================================================
+
     /**
-     * Créer une plage horaire
+     * Vérifier qu'un utilisateur a le droit d'accéder/modifier un RDV
      */
+    private function verifierAccesRdv(RdvCreneau $rdv, int $userId): void
+    {
+        $user = User::with('patient')->find($userId);
+
+        if (!$user) {
+            throw new \Exception('Utilisateur non trouvé.');
+        }
+
+        // Super admin : accès total
+        if ($user->isSuperAdmin()) {
+            return;
+        }
+
+        // Patient : doit être le propriétaire du RDV
+        if ($user->isPatient()) {
+            if (!$user->patient || $rdv->patient_id !== $user->patient->id) {
+                throw new \Exception('Vous n\'êtes pas autorisé à accéder à ce RDV.');
+            }
+            return;
+        }
+
+        // Personnel du cabinet : doit appartenir au même cabinet
+        if ($user->hasCabinetAccess()) {
+            if ($rdv->cabinet_id !== $user->cabinet_id) {
+                throw new \Exception('Vous n\'êtes pas autorisé à accéder à ce RDV.');
+            }
+            return;
+        }
+
+        throw new \Exception('Vous n\'êtes pas autorisé à accéder à ce RDV.');
+    }
+
+    // ==========================================================
+    // CRÉNEAUX HORAIRES
+    // ==========================================================
+
     public function createCreneauHoraire(array $data, int $cabinetId): array
     {
         try {
@@ -54,9 +94,6 @@ class RdvService
         }
     }
 
-    /**
-     * Modifier une plage horaire
-     */
     public function updateCreneauHoraire(array $data, int $cabinetId, int $creneauId): array
     {
         try {
@@ -84,9 +121,6 @@ class RdvService
         }
     }
 
-    /**
-     * Supprimer une plage horaire
-     */
     public function deleteCreneauHoraire(int $cabinetId, int $creneauId): bool
     {
         try {
@@ -105,27 +139,17 @@ class RdvService
         }
     }
 
-    /**
-     * Lister les plages horaires d'un cabinet
-     */
     public function getCreneauxHoraires(int $cabinetId): array
     {
         try {
             $jourOrdre = [
-                'lundi' => 1,
-                'mardi' => 2,
-                'mercredi' => 3,
-                'jeudi' => 4,
-                'vendredi' => 5,
-                'samedi' => 6,
-                'dimanche' => 7
+                'lundi' => 1, 'mardi' => 2, 'mercredi' => 3,
+                'jeudi' => 4, 'vendredi' => 5, 'samedi' => 6, 'dimanche' => 7
             ];
 
             $creneaux = CreneauHoraire::where('cabinet_id', $cabinetId)
                 ->get()
-                ->sortBy(function ($item) use ($jourOrdre) {
-                    return $jourOrdre[$item->jour_semaine] ?? 8;
-                })
+                ->sortBy(fn($item) => $jourOrdre[$item->jour_semaine] ?? 8)
                 ->values();
 
             return ['creneaux' => $creneaux];
@@ -135,9 +159,6 @@ class RdvService
         }
     }
 
-    /**
-     * Récupérer les créneaux disponibles
-     */
     public function getAvailableSlots(int $cabinetId, string $date): array
     {
         try {
@@ -145,26 +166,19 @@ class RdvService
                 ->where('date', $date)
                 ->whereIn('statut', ['reserve', 'confirme'])
                 ->get()
-                ->map(function ($rdv) {
-                    return [
-                        'heure_debut' => $rdv->heure_debut,
-                        'heure_fin' => $rdv->heure_fin,
-                    ];
-                })
+                ->map(fn($rdv) => [
+                    'heure_debut' => $rdv->heure_debut,
+                    'heure_fin' => $rdv->heure_fin,
+                ])
                 ->toArray();
 
             $joursMap = [
-                'monday' => 'lundi',
-                'tuesday' => 'mardi',
-                'wednesday' => 'mercredi',
-                'thursday' => 'jeudi',
-                'friday' => 'vendredi',
-                'saturday' => 'samedi',
+                'monday' => 'lundi', 'tuesday' => 'mardi', 'wednesday' => 'mercredi',
+                'thursday' => 'jeudi', 'friday' => 'vendredi', 'saturday' => 'samedi',
                 'sunday' => 'dimanche',
             ];
-            
             $jourFr = $joursMap[strtolower(date('l', strtotime($date)))] ?? null;
-            
+
             if (!$jourFr) {
                 return ['slots' => []];
             }
@@ -184,7 +198,6 @@ class RdvService
                 $duree = $creneau->duree_rdv;
                 $debut = strtotime($creneau->heure_debut);
                 $fin = strtotime($creneau->heure_fin);
-                
                 $pauseDebut = $creneau->pause_debut ? strtotime($creneau->pause_debut) : null;
                 $pauseFin = $creneau->pause_fin ? strtotime($creneau->pause_fin) : null;
 
@@ -193,7 +206,7 @@ class RdvService
                 while ($current + ($duree * 60) <= $fin) {
                     $slotDebut = date('H:i', $current);
                     $slotFin = date('H:i', $current + ($duree * 60));
-                    
+
                     $estDansPause = false;
                     if ($pauseDebut && $pauseFin) {
                         if ($current >= $pauseDebut && $current < $pauseFin) {
@@ -228,9 +241,10 @@ class RdvService
         }
     }
 
-    /**
-     * Prendre un RDV
-     */
+    // ==========================================================
+    // PRISE DE RDV
+    // ==========================================================
+
     public function prendreRdv(array $data, ?int $userId = null): array
     {
         try {
@@ -240,18 +254,42 @@ class RdvService
             $date = $data['date'];
             $heureDebut = $data['heure_debut'];
 
-            // 1. Vérifier que le créneau est disponible
+            // VÉRIFICATION 1 : plage active
+            $joursMap = [
+                'monday' => 'lundi', 'tuesday' => 'mardi', 'wednesday' => 'mercredi',
+                'thursday' => 'jeudi', 'friday' => 'vendredi', 'saturday' => 'samedi',
+                'sunday' => 'dimanche',
+            ];
+            $jourFr = $joursMap[strtolower(date('l', strtotime($date)))] ?? null;
+
+            $creneauHoraire = CreneauHoraire::where('cabinet_id', $cabinetId)
+                ->where('jour_semaine', $jourFr)
+                ->where('est_actif', true)
+                ->where('heure_debut', '<=', $heureDebut)
+                ->where('heure_fin', '>', $heureDebut)
+                ->first();
+
+            if (!$creneauHoraire) {
+                throw new \Exception('Aucune plage horaire active pour ce créneau. Le cabinet n\'accepte pas de RDV à cette heure.');
+            }
+
+            // VÉRIFICATION 2 : créneau déjà réservé
             $existingRdv = RdvCreneau::where('cabinet_id', $cabinetId)
                 ->where('date', $date)
                 ->where('heure_debut', $heureDebut)
-                ->whereIn('statut', ['reserve', 'confirme'])
-                ->first();
+                ->whereIn('statut', ['reserve', 'confirme', 'termine'])
+                ->exists();
 
             if ($existingRdv) {
                 throw new \Exception('Ce créneau est déjà réservé.');
             }
 
-            // 2. Déterminer le patient et la source
+            // VÉRIFICATION 3 : visiteur sans téléphone
+            if (!$userId && empty($data['visiteur_telephone'])) {
+                throw new \Exception('Le numéro de téléphone est obligatoire pour un visiteur.');
+            }
+
+            // Patient et source
             $patientId = null;
             $source = 'visiteur';
             $visiteurNom = null;
@@ -261,84 +299,59 @@ class RdvService
 
             if ($userId) {
                 $user = User::with('patient')->find($userId);
-                
-                if ($user) {
-                    if ($user->patient) {
-                        $patientId = $user->patient->id;
-                        $source = 'en_ligne';
-                    } else {
-                        $patient = Patient::create([
-                            'user_id' => $userId,
-                            'nom' => $user->nom,
-                            'prenom' => $user->prenom,
-                            'telephone' => $user->telephone,
-                            'email' => $user->email,
-                            'ville' => $user->ville,
-                            'date_naissance' => null,
-                            'adresse' => null,
-                            'notes' => null,
-                        ]);
-                        $patientId = $patient->id;
-                        $source = 'en_ligne';
-                    }
-                } else {
+
+                if (!$user) {
                     throw new \Exception('Utilisateur non trouvé.');
                 }
+
+                if ($user->patient) {
+                    $patientId = $user->patient->id;
+                } else {
+                    $patient = Patient::create([
+                        'user_id' => $userId,
+                        'nom' => $user->nom,
+                        'prenom' => $user->prenom,
+                        'telephone' => $user->telephone,
+                        'email' => $user->email,
+                        'ville' => $user->ville,
+                        'date_naissance' => null,
+                        'adresse' => null,
+                        'notes' => null,
+                    ]);
+                    $patientId = $patient->id;
+                }
+                $source = 'en_ligne';
             } else {
                 $visiteurNom = $data['visiteur_nom'] ?? null;
                 $visiteurPrenom = $data['visiteur_prenom'] ?? null;
-                $visiteurTelephone = $data['visiteur_telephone'] ?? null;
+                $visiteurTelephone = $data['visiteur_telephone'];
                 $visiteurEmail = $data['visiteur_email'] ?? null;
 
-                if ($visiteurTelephone) {
-                    $existingPatient = Patient::where('telephone', $visiteurTelephone)->first();
-                    if ($existingPatient) {
-                        $patientId = $existingPatient->id;
-                        $source = 'visiteur';
-                    } else {
-                        $patient = Patient::create([
-                            'user_id' => null,
-                            'nom' => $visiteurNom ?? 'Visiteur',
-                            'prenom' => $visiteurPrenom ?? 'Inconnu',
-                            'telephone' => $visiteurTelephone,
-                            'email' => $visiteurEmail,
-                            'ville' => 'Non renseignée',
-                            'date_naissance' => null,
-                            'adresse' => null,
-                            'notes' => null,
-                        ]);
-                        $patientId = $patient->id;
-                        $source = 'visiteur';
-                    }
+                $existingPatient = Patient::where('telephone', $visiteurTelephone)->first();
+                if ($existingPatient) {
+                    $patientId = $existingPatient->id;
                 } else {
                     $patient = Patient::create([
                         'user_id' => null,
-                        'nom' => 'Visiteur',
-                        'prenom' => 'Anonyme',
-                        'telephone' => null,
-                        'email' => null,
+                        'nom' => $visiteurNom ?? 'Visiteur',
+                        'prenom' => $visiteurPrenom ?? 'Inconnu',
+                        'telephone' => $visiteurTelephone,
+                        'email' => $visiteurEmail,
                         'ville' => 'Non renseignée',
                         'date_naissance' => null,
                         'adresse' => null,
                         'notes' => null,
                     ]);
                     $patientId = $patient->id;
-                    $source = 'visiteur';
                 }
+                $source = 'visiteur';
             }
 
-            // 3. Calculer l'heure de fin
-            $duree = 30;
-            $creneauHoraire = CreneauHoraire::where('cabinet_id', $cabinetId)
-                ->where('jour_semaine', strtolower(date('l', strtotime($date))))
-                ->first();
-            if ($creneauHoraire) {
-                $duree = $creneauHoraire->duree_rdv;
-            }
-
+            // Heure de fin
+            $duree = $creneauHoraire->duree_rdv ?? 30;
             $heureFin = date('H:i', strtotime($heureDebut) + ($duree * 60));
 
-            // 4. Créer le RDV
+            // Création
             $rdv = RdvCreneau::create([
                 'cabinet_id' => $cabinetId,
                 'patient_id' => $patientId,
@@ -372,21 +385,24 @@ class RdvService
         }
     }
 
-    /**
-     * Annuler un RDV
-     */
-    public function annulerRdv(int $rdvId): array
+    // ==========================================================
+    // GESTION DES RDV
+    // ==========================================================
+
+    public function annulerRdv(int $rdvId, int $userId): array
     {
         try {
             DB::beginTransaction();
 
             $rdv = RdvCreneau::with('patient')->findOrFail($rdvId);
 
+            $this->verifierAccesRdv($rdv, $userId);
+
             if ($rdv->statut === 'annule') {
                 throw new \Exception('Ce RDV est déjà annulé.');
             }
 
-            if ($rdv->statut === 'termine' || $rdv->statut === 'non_honore') {
+            if (in_array($rdv->statut, ['termine', 'non_honore'])) {
                 throw new \Exception('Ce RDV ne peut plus être annulé.');
             }
 
@@ -406,9 +422,6 @@ class RdvService
         }
     }
 
-    /**
-     * Confirmer un RDV (par le cabinet)
-     */
     public function confirmerRdv(int $rdvId): array
     {
         try {
@@ -420,7 +433,7 @@ class RdvService
                 throw new \Exception('Ce RDV est déjà confirmé.');
             }
 
-            if ($rdv->statut === 'annule' || $rdv->statut === 'termine' || $rdv->statut === 'non_honore') {
+            if (in_array($rdv->statut, ['annule', 'termine', 'non_honore'])) {
                 throw new \Exception('Ce RDV ne peut pas être confirmé.');
             }
 
@@ -440,9 +453,6 @@ class RdvService
         }
     }
 
-    /**
-     * Marquer un RDV comme non honoré (patient absent)
-     */
     public function nonHonoreRdv(int $rdvId): array
     {
         try {
@@ -454,7 +464,7 @@ class RdvService
                 throw new \Exception('Ce RDV est déjà marqué comme non honoré.');
             }
 
-            if ($rdv->statut === 'annule' || $rdv->statut === 'termine') {
+            if (in_array($rdv->statut, ['annule', 'termine'])) {
                 throw new \Exception('Ce RDV ne peut pas être marqué comme non honoré.');
             }
 
@@ -474,9 +484,6 @@ class RdvService
         }
     }
 
-    /**
-     * Terminer un RDV (consultation effectuée)
-     */
     public function terminerRdv(int $rdvId): array
     {
         try {
@@ -488,7 +495,7 @@ class RdvService
                 throw new \Exception('Ce RDV est déjà terminé.');
             }
 
-            if ($rdv->statut === 'annule' || $rdv->statut === 'non_honore') {
+            if (in_array($rdv->statut, ['annule', 'non_honore'])) {
                 throw new \Exception('Ce RDV ne peut pas être terminé.');
             }
 
@@ -508,46 +515,40 @@ class RdvService
         }
     }
 
-    /**
-     * Modifier un RDV (date/heure) - AVEC NOTIFICATIONS ET EMAILS
-     */
-    public function modifierRdv(array $data, int $rdvId): array
+    public function modifierRdv(array $data, int $rdvId, int $userId): array
     {
         try {
             DB::beginTransaction();
 
             $rdv = RdvCreneau::with('patient')->findOrFail($rdvId);
 
-            if ($rdv->statut === 'annule' || $rdv->statut === 'termine' || $rdv->statut === 'non_honore') {
+            $this->verifierAccesRdv($rdv, $userId);
+
+            if (in_array($rdv->statut, ['annule', 'termine', 'non_honore'])) {
                 throw new \Exception('Ce RDV ne peut plus être modifié.');
             }
 
-            // Sauvegarder les anciennes valeurs
             $ancienneDate = $rdv->date;
             $ancienneHeure = $rdv->heure_debut;
 
-            // Vérifier que le nouveau créneau est disponible
             if (isset($data['date']) && isset($data['heure_debut'])) {
                 $existingRdv = RdvCreneau::where('cabinet_id', $rdv->cabinet_id)
                     ->where('date', $data['date'])
                     ->where('heure_debut', $data['heure_debut'])
                     ->where('id', '!=', $rdvId)
                     ->whereIn('statut', ['reserve', 'confirme'])
-                    ->first();
+                    ->exists();
 
                 if ($existingRdv) {
                     throw new \Exception('Ce créneau est déjà réservé.');
                 }
             }
 
-            // Mettre à jour
             $rdv->update($data);
 
-            // Si date ou heure a changé
             $dateModifiee = isset($data['date']) || isset($data['heure_debut']);
-            
+
             if ($dateModifiee) {
-                // ✅ Notification pour le patient
                 if ($rdv->patient && $rdv->patient->user_id) {
                     $user = User::find($rdv->patient->user_id);
                     if ($user) {
@@ -560,7 +561,6 @@ class RdvService
                             'cabinet_id' => $rdv->cabinet_id,
                         ]);
 
-                        // ✅ Email au patient
                         if ($user->email) {
                             $cabinet = Cabinet::find($rdv->cabinet_id);
                             $this->emailService->sendRdvModifie(
@@ -576,12 +576,11 @@ class RdvService
                     }
                 }
 
-               // ✅ Notification pour le cabinet (propriétaire)
                 $cabinet = Cabinet::find($rdv->cabinet_id);
                 if ($cabinet && $cabinet->proprietaire) {
                     $proprietaire = $cabinet->proprietaire;
                     $patientNom = $rdv->patient ? $rdv->patient->nom . ' ' . $rdv->patient->prenom : 'Visiteur';
-                    
+
                     $this->notificationService->create([
                         'user_id' => $proprietaire->id,
                         'type' => 'rdv_modifie',
@@ -615,30 +614,47 @@ class RdvService
         }
     }
 
-    /**
-     * Récupérer les RDV d'un patient
-     */
-    public function getRdvByPatient(int $patientId): array
+    // ==========================================================
+    // LECTURE
+    // ==========================================================
+
+    public function getRdvByPatient(int $patientId, int $userId): array
     {
         try {
+            $user = User::with('patient')->find($userId);
+
+            if (!$user) {
+                throw new \Exception('Utilisateur non trouvé.');
+            }
+
+            if ($user->isPatient()) {
+                if (!$user->patient || $user->patient->id !== $patientId) {
+                    throw new \Exception('Vous n\'êtes pas autorisé à accéder aux RDV de ce patient.');
+                }
+            } elseif ($user->hasCabinetAccess()) {
+                $patientDuCabinet = RdvCreneau::where('cabinet_id', $user->cabinet_id)
+                    ->where('patient_id', $patientId)
+                    ->exists();
+                if (!$patientDuCabinet) {
+                    throw new \Exception('Ce patient n\'appartient pas à votre cabinet.');
+                }
+            } elseif (!$user->isSuperAdmin()) {
+                throw new \Exception('Accès refusé.');
+            }
+
             $rdvs = RdvCreneau::with(['cabinet'])
                 ->where('patient_id', $patientId)
                 ->orderBy('date', 'desc')
                 ->orderBy('heure_debut', 'desc')
                 ->get();
 
-            return [
-                'rdvs' => $rdvs,
-            ];
+            return ['rdvs' => $rdvs];
         } catch (\Exception $e) {
             Log::error('Erreur récupération RDV patient : ' . $e->getMessage());
             throw $e;
         }
     }
 
-    /**
-     * Récupérer les RDV d'un cabinet
-     */
     public function getRdvByCabinet(int $cabinetId, ?string $date = null, ?string $statut = null): array
     {
         try {
@@ -657,9 +673,7 @@ class RdvService
                 ->orderBy('heure_debut', 'desc')
                 ->get();
 
-            return [
-                'rdvs' => $rdvs,
-            ];
+            return ['rdvs' => $rdvs];
         } catch (\Exception $e) {
             Log::error('Erreur récupération RDV cabinet : ' . $e->getMessage());
             throw $e;

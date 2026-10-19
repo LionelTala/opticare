@@ -12,97 +12,99 @@ use Illuminate\Validation\ValidationException;
 
 class AuthService
 {
-    public function registerPatient(array $data): array
-    {
-        try {
-            DB::beginTransaction();
+   public function registerPatient(array $data): array
+{
+    try {
+        DB::beginTransaction();
 
-            $user = User::create([
-                'nom' => $data['nom'],
-                'prenom' => $data['prenom'],
-                'email' => $data['email'] ?? null,
-                'telephone' => $data['telephone'],
-                'ville' => $data['ville'],
-                'password' => Hash::make($data['password']),
-                'role' => 'patient',
-                'is_active' => true,
-            ]);
+        $user = User::create([
+            'nom' => $data['nom'],
+            'prenom' => $data['prenom'],
+            'email' => $data['email'] ?? null,
+            'telephone' => $data['telephone'],
+            'ville' => $data['ville'],
+            'password' => Hash::make($data['password']),
+            'role' => 'patient',
+            'is_active' => true,
+        ]);
 
-            $patient = Patient::create([
-                'user_id' => $user->id,
-                'nom' => $data['nom'],
-                'prenom' => $data['prenom'],
-                'telephone' => $data['telephone'],
-                'email' => $data['email'] ?? null,
-                'ville' => $data['ville'],
-                'date_naissance' => $data['date_naissance'] ?? null,
-                'adresse' => $data['adresse'] ?? null,
-                'notes' => null,
-            ]);
+        $patient = Patient::create([
+            'user_id' => $user->id,
+            'nom' => $data['nom'],
+            'prenom' => $data['prenom'],
+            'telephone' => $data['telephone'],
+            'email' => $data['email'] ?? null,
+            'ville' => $data['ville'],
+            'date_naissance' => $data['date_naissance'] ?? null,
+            'adresse' => $data['adresse'] ?? null,
+            'notes' => null,
+        ]);
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token')->plainTextToken;
 
-            DB::commit();
+        DB::commit();
 
-            return [
-                'user' => $user,
-                'patient' => $patient,
-                'token' => $token,
-                'role' => $user->role,
-            ];
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erreur inscription patient : ' . $e->getMessage());
-            throw $e;
-        }
+        // ⚠️ Charger la relation patient avant de retourner
+        $user->load('patient');
+
+        return [
+            'user' => $user,
+            'patient' => $patient,
+            'token' => $token,
+            'role' => $user->role,
+        ];
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Erreur inscription patient : ' . $e->getMessage());
+        throw $e;
     }
+}
 
     public function registerCabinet(array $data): array
-    {
-        try {
-            DB::beginTransaction();
+{
+    try {
+        DB::beginTransaction();
 
-            $user = User::create([
-                'nom' => $data['nom'],
-                'prenom' => $data['prenom'],
-                'email' => $data['email'] ?? null,
-                'telephone' => $data['telephone'],
-                'ville' => $data['ville'],
-                'password' => Hash::make($data['password']),
-                'role' => 'proprietaire',
-                'is_active' => true,
-            ]);
+        $user = User::create([
+            'nom' => $data['nom'],
+            'prenom' => $data['prenom'],
+            'email' => $data['email'] ?? null,
+            'telephone' => $data['telephone'],
+            'ville' => $data['ville'],
+            'password' => Hash::make($data['password']),
+            'role' => 'proprietaire',
+            'is_active' => true,
+        ]);
 
-            $cabinet = Cabinet::create([
-                'nom' => $data['cabinet_nom'],
-                'adresse' => $data['cabinet_adresse'],
-                'ville' => $data['cabinet_ville'],
-                'telephone' => $data['cabinet_telephone'],
-                'email' => $data['cabinet_email'],
-                'status' => 'en_attente',
-                'proprietaire_id' => $user->id,
-            ]);
+        $cabinet = Cabinet::create([
+            'nom' => $data['cabinet_nom'],
+            'adresse' => $data['cabinet_adresse'],
+            'ville' => $data['cabinet_ville'],
+            'telephone' => $data['cabinet_telephone'],
+            'email' => $data['cabinet_email'],
+            'status' => 'en_attente',
+            'proprietaire_id' => $user->id,
+        ]);
 
-            $user->cabinet_id = $cabinet->id;
-            $user->save();
+        $user->cabinet_id = $cabinet->id;
+        $user->save();
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+        DB::commit();
 
-            DB::commit();
-
-            return [
-                'user' => $user,
-                'cabinet' => $cabinet,
-                'token' => $token,
-                'role' => $user->role,
-                'requires_verification' => true,
-            ];
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erreur inscription cabinet : ' . $e->getMessage());
-            throw $e;
-        }
+        // ⚠️ NE PAS créer de token tant que le cabinet n'est pas validé
+        return [
+            'user' => $user,
+            'cabinet' => $cabinet,
+            'token' => null,          // ⬅️ Plus de token !
+            'role' => $user->role,
+            'requires_verification' => true,
+        ];
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Erreur inscription cabinet : ' . $e->getMessage());
+        throw $e;
     }
+}
 
     public function login(array $credentials): array
     {

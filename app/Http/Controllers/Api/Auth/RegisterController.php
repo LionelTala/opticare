@@ -21,21 +21,18 @@ class RegisterController extends Controller
     }
 
     public function registerPatient(RegisterPatientRequest $request): JsonResponse
-    {
-        try {
-            $result = $this->authService->registerPatient($request->validated());
+{
+    try {
+        $result = $this->authService->registerPatient($request->validated());
 
-            return $this->successResponse([
-                'user' => new UserResource($result['user']),
-                'token' => $result['token'],
-                'role' => $result['role'],
-            ], 'Inscription réussie ! Bienvenue sur Opticare.', 201);
-        } catch (\Exception $e) {
-            return $this->errorResponse(
-                'Erreur lors de l\'inscription',
-                ['general' => $e->getMessage()],
-                500
-            );
-        }
+        return $this->successResponse([
+            'user' => new UserResource($result['user']->load('patient')),
+            'token' => $result['token'],
+            'role' => $result['role'],
+        ], 'Inscription réussie ! Bienvenue sur Opticare.', 201);
+    } catch (\Exception $e) {
+        return $this->errorResponse('Erreur lors de l\'inscription', ['general' => $e->getMessage()], 500);
     }
+}
+
 }

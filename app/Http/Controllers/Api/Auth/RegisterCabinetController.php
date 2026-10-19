@@ -20,24 +20,20 @@ class RegisterCabinetController extends Controller
         $this->authService = $authService;
     }
 
-    public function registerCabinet(RegisterCabinetRequest $request): JsonResponse
-    {
-        try {
-            $result = $this->authService->registerCabinet($request->validated());
+   public function registerCabinet(RegisterCabinetRequest $request): JsonResponse
+{
+    try {
+        $result = $this->authService->registerCabinet($request->validated());
 
-            return $this->successResponse([
-                'user' => new UserResource($result['user']),
-                'cabinet' => $result['cabinet'],
-                'token' => $result['token'],
-                'role' => $result['role'],
-                'requires_verification' => $result['requires_verification'],
-            ], 'Cabinet enregistré avec succès. En attente de validation par un administrateur.', 201);
-        } catch (\Exception $e) {
-            return $this->errorResponse(
-                'Erreur lors de l\'inscription du cabinet',
-                ['general' => $e->getMessage()],
-                500
-            );
-        }
+        return $this->successResponse([
+            'user' => new UserResource($result['user']),
+            'cabinet' => $result['cabinet'],
+            'role' => $result['role'],
+            'requires_verification' => true,
+            'message' => 'Votre cabinet est en attente de validation. Vous recevrez un email dès qu\'un administrateur aura traité votre demande.',
+        ], 'Cabinet enregistré avec succès. En attente de validation par un administrateur.', 201);
+    } catch (\Exception $e) {
+        return $this->errorResponse('Erreur lors de l\'inscription du cabinet', ['general' => $e->getMessage()], 500);
     }
+}
 }

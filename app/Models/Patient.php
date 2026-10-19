@@ -30,13 +30,35 @@ class Patient extends Model
         return $this->belongsTo(User::class);
     }
 
-    // Vérifier si le patient a un compte (patient connecté)
+    // Relations ajoutées
+    public function cabinets()
+    {
+        return $this->belongsToMany(Cabinet::class, 'cabinet_patient')
+            ->withPivot('est_interne', 'date_inscription')
+            ->withTimestamps();
+    }
+
+    public function rdvs()
+    {
+        return $this->hasMany(RdvCreneau::class);
+    }
+
+    public function consultations()
+    {
+        return $this->hasMany(Consultation::class);
+    }
+
+    public function avis()
+    {
+        return $this->hasMany(Avis::class);
+    }
+
+    // Vérifications
     public function hasAccount(): bool
     {
         return $this->user_id !== null;
     }
 
-    // Vérifier si c'est un patient interne (ERP)
     public function isInterne(): bool
     {
         return $this->user_id === null;

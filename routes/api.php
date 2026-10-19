@@ -13,6 +13,12 @@ use App\Http\Controllers\Api\ConsultationController;
 use App\Http\Controllers\Api\PersonnelController;
 use App\Http\Controllers\Api\RdvController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\Auth\LogoutController;
+use App\Http\Controllers\Api\PatientController;
+ use App\Http\Controllers\Api\OrdonnanceController;
+use App\Http\Controllers\Api\FactureController;
+use App\Http\Controllers\Api\DossierPatientController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +28,10 @@ use App\Http\Controllers\Api\NotificationController;
 
 // Route utilisateur connecté
 Route::get('/user', function (Request $request) {
-    return $request->user();
+    $user = $request->user();
+    if ($user->isPatient()) $user->load('patient');
+    if ($user->hasCabinetAccess()) $user->load('cabinet');
+    return new \App\Http\Resources\UserResource($user);
 })->middleware('auth:sanctum');
 
 // =============================================
@@ -34,6 +43,8 @@ Route::prefix('auth')->group(function () {
     Route::post('/register/patient', [RegisterController::class, 'registerPatient']);
     Route::post('/register/cabinet', [RegisterCabinetController::class, 'registerCabinet']);
     Route::post('/login', [LoginController::class, 'login'])->name('login');
+    Route::post('/logout', [LogoutController::class, 'logout']);
+Route::post('/logout/all', [LogoutController::class, 'logoutAllDevices']);
 });
 
 // Cabinets publics
@@ -52,6 +63,16 @@ Route::post('/rdv', [RdvController::class, 'prendreRdv']);
 // =============================================
 
 Route::middleware(['auth:sanctum'])->group(function () {
+
+
+// Routes protégées - Patients du cabinet
+Route::middleware(['role:proprietaire,opticien,secretaire'])
+    ->prefix('cabinets/{cabinetId}/patients')
+    ->group(function () {
+        Route::get('/', [PatientController::class, 'index']);
+        Route::post('/', [PatientController::class, 'store']);
+        Route::get('/{patientId}', [PatientController::class, 'show']);
+    });
 
     // ----- Gestion du profil cabinet (propriétaire ou super_admin) -----
     Route::patch('/cabinets/{id}/profile', [CabinetController::class, 'updateProfile'])
@@ -101,7 +122,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/{personnelId}', [PersonnelController::class, 'show']);
         Route::put('/{personnelId}', [PersonnelController::class, 'update']);
         Route::delete('/{personnelId}', [PersonnelController::class, 'destroy']);
+
     });
+     
+    Route::get('/patients/{patientId}/dossier-pdf', [DossierPatientController::class, 'download']);
 
     // =============================================
     // ROUTES NOTIFICATIONS
@@ -135,6 +159,29 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/patients/{patientId}/rdv', [RdvController::class, 'getRdvByPatient']);
     Route::get('/cabinets/{cabinetId}/rdv', [RdvController::class, 'getRdvByCabinet'])
         ->middleware('role:proprietaire,opticien,secretaire');
+
+   
+
+// Ordonnances
+Route::middleware(['role:proprietaire,opticien,secretaire'])->prefix('cabinets/{cabinetId}/ordonnances')->group(function () {
+    Route::get('/', [OrdonnanceController::class, 'index']);
+});
+
+Route::middleware(['role:proprietaire,opticien'])->group(function () {
+    Route::post('/consultations/{consultationId}/ordonnances', [OrdonnanceController::class, 'store']);
+    Route::get('/ordonnances/{id}', [OrdonnanceController::class, 'show']);
+});
+
+// Factures
+Route::middleware(['role:proprietaire,opticien,secretaire'])->prefix('cabinets/{cabinetId}/factures')->group(function () {
+    Route::get('/', [FactureController::class, 'index']);
+});
+
+Route::middleware(['role:proprietaire,opticien,secretaire'])->group(function () {
+    Route::post('/commandes/{commandeId}/factures', [FactureController::class, 'store']);
+    Route::get('/factures/{id}', [FactureController::class, 'show']);
+    Route::put('/factures/{id}/paiement', [FactureController::class, 'marquerPayee']);
+});
 });
 
 // =============================================
